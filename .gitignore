@@ -51,7 +51,7 @@ qtcreator-*
 CATKIN_IGNORE
 
 # SDK
-/src/src/slamware_ros_sdk_linux-x86_64-gcc9/
+/src/slamware_ros_sdk_linux-x86_64-gcc9/
 
 # Log files
 /log/
