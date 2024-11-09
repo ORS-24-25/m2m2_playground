@@ -41,14 +41,17 @@ def handle_connection(connection):
 
     connection.close()
 
+def main():
+    sock = open_socket()
+    while True:
+        try:
+            connection, client_address = sock.accept()
+        except KeyboardInterrupt:
+            break
+        print("connection from %s:%s" % client_address)
+        handle_connection(connection)
 
-sock = open_socket()
-while True:
-    try:
-        connection, client_address = sock.accept()
-    except KeyboardInterrupt:
-        break
-    print("connection from %s:%s" % client_address)
-    handle_connection(connection)
+    sock.close()
 
-sock.close()
+if __name__ == "__main__":
+    main()
