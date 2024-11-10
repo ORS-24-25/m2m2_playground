@@ -272,6 +272,9 @@ if __name__ == '__main__':
     # st.get_all()
     map_data = st.get_map_data()
     show_map(map_data)
+
+    # laser_data = st.get_laser_scan()
+    show_summary(st)
     # """
     if "--clear-map" in sys.argv:
         st.clear_map()
