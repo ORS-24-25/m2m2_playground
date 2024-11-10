@@ -253,11 +253,13 @@ def show_map(map_data):
 
 
 if __name__ == '__main__':
-    # host = "192.168.11.1"
-    host = "192.168.123.234"
+    host = "192.168.11.1"
+    # host = "192.168.123.234"
+    # host = "127.0.0.1"
     st = SlamtecMapper(host=host, port=1445, dump=True)
     # show_summary(st)
 
+    """
     data = st.get_laser_scan(valid_only=False)
     csv = []
     for angle, distance, valid in data:
@@ -265,10 +267,11 @@ if __name__ == '__main__':
     p = Path("../../laser-full.csv")
     p.write_text("\n".join(csv))
     """
+    # """
     # st.get_all()
     map_data = st.get_map_data()
     show_map(map_data)
-    """
+    # """
     if "--clear-map" in sys.argv:
         st.clear_map()
     if "--stop-update" in sys.argv:
