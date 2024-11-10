@@ -6,7 +6,8 @@ from pathlib import Path
 
 def open_socket():
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    server_address = ('192.168.123.234', 1445)
+    # server_address = ('192.168.123.234', 1445)
+    server_address = ('127.0.0.1', 1445)    # To test locally that this is communicating with slamtec.py
     sock.bind(server_address)
     sock.listen(1)
     return sock
