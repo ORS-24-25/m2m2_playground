@@ -57,4 +57,4 @@ CATKIN_IGNORE
 /log/
 
 # Dump folder
-src/python-slamtec-mapper-main/python-slamtec-mapper-main/dump
+src/python-slamtec-mapper-main/dump
