@@ -3,32 +3,47 @@
 import rclpy
 from rclpy.node import Node
 from sensor_msgs.msg import LaserScan
+from nav_msgs.msg import OccupancyGrid, Odometry
+from geometry_msgs.msg import PoseStamped, TransformStamped
+from tf2_ros import TransformBroadcaster
 import math
 from slamtec import SlamtecMapper
 import time
+import numpy as np
 
 class SlamtecPublisher(Node):
     def __init__(self):
         super().__init__('slamtec_publisher')
         
-        # Create publisher
-        self.publisher_ = self.create_publisher(LaserScan, 'scan', 10)
+        # Create publishers
+        self.scan_publisher_ = self.create_publisher(LaserScan, 'scan', 10)
+        self.map_publisher_ = self.create_publisher(OccupancyGrid, 'map', 10)
+        # self.pose_publisher_ = self.create_publisher(PoseStamped, 'pose', 10)
+        # self.odom_publisher_ = self.create_publisher(Odometry, 'odom', 10)
         
         # Initialize Slamtec
         self.slamtec = SlamtecMapper(host='192.168.11.1', port=1445)
-        
-        # Create timer
-        self.timer = self.create_timer(0.1, self.timer_callback)  # 10Hz
-        self.frame_id = 'laser_frame'
 
-    def timer_callback(self):
+        # Initialize TF Broadcaster
+        self.tf_broadcaster = TransformBroadcaster(self)
+        
+        # Create timers for each publisher
+        self.create_timer(0.1, self.publish_scan)   # 10Hz
+        self.create_timer(1.0, self.publish_map)    # 1Hz
+        # self.create_timer(0.1, self.publish_pose)   # 10Hz
+
+        self.laser_frame = 'laser_frame'
+        self.map_frame = 'map'
+        self.base_frame = 'base_link'
+
+    def publish_scan(self):
         # Get laser scan data
         scan_data = self.slamtec.get_laser_scan(valid_only=True)
         
         # Create LaserScan message
         msg = LaserScan()
         msg.header.stamp = self.get_clock().now().to_msg()
-        msg.header.frame_id = self.frame_id
+        msg.header.frame_id = self.laser_frame
         
         # Convert data
         angles = []
@@ -46,8 +61,63 @@ class SlamtecPublisher(Node):
         msg.range_max = 8.0   # From Slamtec specs
         msg.ranges = ranges
         
-        # Publish
-        self.publisher_.publish(msg)
+        self.scan_publisher_.publish(msg)
+
+    def publish_map(self):
+        map_data = self.slamtec.get_map_data()
+        msg = OccupancyGrid()
+        msg.header.stamp = self.get_clock().now().to_msg()
+        msg.header.frame_id = self.map_frame
+        
+        # Convert map data to occupancy grid
+        msg.info.resolution = 0.05  # 5cm per pixel
+        msg.info.width = map_data['dimension_x']
+        msg.info.height = map_data['dimension_y']
+        msg.info.origin.position.x = map_data['min_x']
+        msg.info.origin.position.y = map_data['min_y']
+        
+        # Convert 2D map data to 1D array
+        grid_data = []
+        for y in range(msg.info.height):
+            # Convert y index from 0-based to 1-based for map data access
+            row = map_data['map_data'].get(y+1, [])  # Use get() with default empty list
+            if not row:
+                self.get_logger().warn(f"Missing map data for row {y+1}")
+                grid_data.extend([-1] * msg.info.width)  # Fill row with unknown
+                continue
+            for x in range(msg.info.width):
+                if x >= len(row):
+                    grid_data.append(-1)  # Unknown space
+                    continue
+                # Clamp values between 0-100
+                value = max(0, min(100, int(row[x] * 100)))
+                grid_data.append(value)
+        
+        msg.data = grid_data
+        self.map_publisher_.publish(msg)
+
+    def publish_pose(self):
+        pose_data = self.slamtec.get_pose()
+        
+        # Publish PoseStamped
+        pose_msg = PoseStamped()
+        pose_msg.header.stamp = self.get_clock().now().to_msg()
+        pose_msg.header.frame_id = self.map_frame
+        pose_msg.pose.position.x = pose_data['x']
+        pose_msg.pose.position.y = pose_data['y']
+        pose_msg.pose.orientation.z = math.sin(pose_data['yaw'] / 2.0)
+        pose_msg.pose.orientation.w = math.cos(pose_data['yaw'] / 2.0)
+        self.pose_publisher_.publish(pose_msg)
+        
+        # Publish transform
+        t = TransformStamped()
+        t.header.stamp = self.get_clock().now().to_msg()
+        t.header.frame_id = self.map_frame
+        t.child_frame_id = self.base_frame
+        t.transform.translation.x = pose_data['x']
+        t.transform.translation.y = pose_data['y']
+        t.transform.rotation = pose_msg.pose.orientation
+        self.tf_broadcaster.sendTransform(t)
 
 def main(args=None):
     rclpy.init(args=args)
