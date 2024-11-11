@@ -12,7 +12,7 @@ import sys
 
 class SlamtecMapper:
     def __init__(self, host, port, dump=False, dump_dir="dump"):
-        # print(f"Connecting to {host}:{port}")
+        print(f"Connecting to {host}:{port}")
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.socket.connect((host, port))
         self.request_id = 0
@@ -22,6 +22,7 @@ class SlamtecMapper:
             self.dump_dir.mkdir(parents=True)
         else:
             self.dump_dir = None
+        print("Connected")
 
     def disconnect(self):
         self.socket.close()
