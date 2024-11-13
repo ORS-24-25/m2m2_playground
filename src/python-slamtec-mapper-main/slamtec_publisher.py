@@ -10,26 +10,30 @@ import math
 from slamtec import SlamtecMapper
 import time
 import numpy as np
+import argparse
 
 class SlamtecPublisher(Node):
-    def __init__(self):
+    def __init__(self, host='192.168.11.1', port=1445, debug=False, publish_all=False, publish_scan=False):
         super().__init__('slamtec_publisher')
 
         # Create publishers
-        self.scan_publisher_ = self.create_publisher(LaserScan, 'scan', 10)
-        # self.map_publisher_ = self.create_publisher(OccupancyGrid, 'map', 10)
-        # self.pose_publisher_ = self.create_publisher(PoseStamped, 'pose', 10)
+        if publish_all or publish_scan:
+            print("Publishing scan data")
+            self.scan_publisher_ = self.create_publisher(LaserScan, 'scan', 10)
+            self.create_timer(0.02, self.publish_scan)
+
+        if publish_all:
+            print("Publishing map and pose data")
+            self.map_publisher_ = self.create_publisher(OccupancyGrid, 'map', 10)
+            self.pose_publisher_ = self.create_publisher(PoseStamped, 'pose', 10)
+            self.create_timer(1.0, self.publish_map)
+            self.create_timer(0.1, self.publish_pose)
 
         # Initialize Slamtec Mapper
-        self.slamtec = SlamtecMapper(host='192.168.11.1', port=1445)
+        self.slamtec = SlamtecMapper(host=host, port=port)
 
         # Initialize TF Broadcaster
         self.tf_broadcaster = TransformBroadcaster(self)
-
-        # Create timers for each publisher
-        self.create_timer(0.02, self.publish_scan)
-        # self.create_timer(1.0, self.publish_map)
-        # self.create_timer(0.1, self.publish_pose)
 
         # Set transform frame names
         self.laser_frame = 'laser_frame'
@@ -125,8 +129,22 @@ class SlamtecPublisher(Node):
         self.tf_broadcaster.sendTransform(t)
 
 def main(args=None):
+    # Start parsing command line arguments
+    parser = argparse.ArgumentParser(description='Slamtec Mapper Publisher')
+    parser.add_argument('--host', type=str, default='192.168.11.1', help='Slamtec Mapper IP address')
+    parser.add_argument('--port', type=int, default=1445, help='Slamtec Mapper port number')
+    parser.add_argument('--all', action='store_true', help='Publish all data (Scan, map, pose)')
+    parser.add_argument('--scan', action='store_true', help='Publish scan data')
+
+    parsed_args = parser.parse_args()
+
     rclpy.init(args=args)
-    publisher = SlamtecPublisher()
+    publisher = SlamtecPublisher(
+        host=parsed_args.host, 
+        port=parsed_args.port,
+        publish_all=(True if parsed_args.all else False),
+        publish_scan=(True if parsed_args.scan else False),
+    )
     rclpy.spin(publisher)
     publisher.destroy_node()
     rclpy.shutdown()
