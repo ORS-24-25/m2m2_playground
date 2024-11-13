@@ -14,24 +14,24 @@ import numpy as np
 class SlamtecPublisher(Node):
     def __init__(self):
         super().__init__('slamtec_publisher')
-        
+
         # Create publishers
         self.scan_publisher_ = self.create_publisher(LaserScan, 'scan', 10)
-        self.map_publisher_ = self.create_publisher(OccupancyGrid, 'map', 10)
+        # self.map_publisher_ = self.create_publisher(OccupancyGrid, 'map', 10)
         # self.pose_publisher_ = self.create_publisher(PoseStamped, 'pose', 10)
-        # self.odom_publisher_ = self.create_publisher(Odometry, 'odom', 10)
-        
-        # Initialize Slamtec
+
+        # Initialize Slamtec Mapper
         self.slamtec = SlamtecMapper(host='192.168.11.1', port=1445)
 
         # Initialize TF Broadcaster
         self.tf_broadcaster = TransformBroadcaster(self)
-        
-        # Create timers for each publisher
-        self.create_timer(0.1, self.publish_scan)   # 10Hz
-        self.create_timer(1.0, self.publish_map)    # 1Hz
-        # self.create_timer(0.1, self.publish_pose)   # 10Hz
 
+        # Create timers for each publisher
+        self.create_timer(0.02, self.publish_scan)
+        # self.create_timer(1.0, self.publish_map)
+        # self.create_timer(0.1, self.publish_pose)
+
+        # Set transform frame names
         self.laser_frame = 'laser_frame'
         self.map_frame = 'map'
         self.base_frame = 'base_link'
@@ -39,29 +39,34 @@ class SlamtecPublisher(Node):
     def publish_scan(self):
         # Get laser scan data
         scan_data = self.slamtec.get_laser_scan(valid_only=True)
-        
+
         # Create LaserScan message
         msg = LaserScan()
         msg.header.stamp = self.get_clock().now().to_msg()
         msg.header.frame_id = self.laser_frame
-        
-        # Convert data
-        angles = []
-        ranges = []
-        for angle, distance, valid in scan_data:
-            angles.append(angle)
-            ranges.append(distance)
-        
-        msg.angle_min = min(angles)
-        msg.angle_max = max(angles)
-        msg.angle_increment = (msg.angle_max - msg.angle_min) / len(angles)
-        msg.time_increment = 0.0
-        msg.scan_time = 0.1
-        msg.range_min = 0.15  # From Slamtec specs
-        msg.range_max = 8.0   # From Slamtec specs
-        msg.ranges = ranges
-        
-        self.scan_publisher_.publish(msg)
+
+        print(scan_data)
+
+        # # Convert data
+        # angles = []
+        # ranges = []
+        # intensities = []
+        # for angle, distance, valid in scan_data:
+        #     angles.append(angle)
+        #     ranges.append(distance)
+        #     intensities.append(100.0 if valid else 0.0)
+
+        # msg.angle_min = min(angles)
+        # msg.angle_max = max(angles)
+        # msg.angle_increment = (msg.angle_max - msg.angle_min) / len(angles)
+        # msg.time_increment = 0.0
+        # msg.scan_time = 0.1
+        # msg.range_min = 0.15
+        # msg.range_max = 8.0
+        # msg.ranges = ranges
+        # msg.intensities = intensities
+
+        # self.scan_publisher_.publish(msg)
 
     def publish_map(self):
         map_data = self.slamtec.get_map_data()
