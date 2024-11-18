@@ -2,6 +2,7 @@
 
 import rclpy
 from rclpy.node import Node
+from rclpy.qos import QoSProfile, QoSReliabilityPolicy, QoSHistoryPolicy
 from sensor_msgs.msg import LaserScan
 from nav_msgs.msg import OccupancyGrid, Odometry
 from geometry_msgs.msg import PoseStamped, TransformStamped
@@ -13,24 +14,8 @@ import numpy as np
 import argparse
 
 class SlamtecPublisher(Node):
-    def __init__(self, host='192.168.11.1', port=1445, debug=False, publish_all=False, publish_scan=False):
+    def __init__(self, host='192.168.11.1', port=1445, debug=False, publish_scan=False):
         super().__init__('slamtec_publisher')
-
-        # Create publishers
-        if publish_all or publish_scan:
-            print("Publishing scan data")
-            self.scan_publisher_ = self.create_publisher(LaserScan, 'scan', 10)
-            self.create_timer(0.02, self.publish_scan)
-
-        if publish_all:
-            print("Publishing map and pose data")
-            self.map_publisher_ = self.create_publisher(OccupancyGrid, 'map', 10)
-            self.pose_publisher_ = self.create_publisher(PoseStamped, 'pose', 10)
-            self.create_timer(1.0, self.publish_map)
-            self.create_timer(0.1, self.publish_pose)
-
-        # Initialize Slamtec Mapper
-        self.slamtec = SlamtecMapper(host=host, port=port)
 
         # Initialize TF Broadcaster
         self.tf_broadcaster = TransformBroadcaster(self)
@@ -39,6 +24,28 @@ class SlamtecPublisher(Node):
         self.laser_frame = 'laser_frame'
         self.map_frame = 'map'
         self.base_frame = 'base_link'
+        self.odom_frame = 'odom'
+
+        # Create publishers
+        if publish_scan:
+            print("Publishing only scan data")
+        sensor_qos = QoSProfile(
+            reliability=QoSReliabilityPolicy.BEST_EFFORT,
+            history=QoSHistoryPolicy.KEEP_LAST,
+            depth=10
+        )
+        self.scan_publisher_ = self.create_publisher(msg_type=LaserScan, topic='scan', qos_profile=sensor_qos)
+        self.create_timer(0.1, self.publish_scan)
+
+        if not publish_scan:
+            print("Publishing scan, map, and pose data")
+            self.map_publisher_ = self.create_publisher(msg_type=OccupancyGrid, topic='map', qos_profile=sensor_qos)
+            self.pose_publisher_ = self.create_publisher(msg_type=PoseStamped, topic='pose', qos_profile=sensor_qos)
+            self.create_timer(1.0, self.publish_map)
+            self.create_timer(0.1, self.publish_pose)
+
+        # Initialize Slamtec Mapper
+        self.slamtec = SlamtecMapper(host=host, port=port)
 
     def publish_scan(self):
         # Get laser scan data
@@ -49,41 +56,44 @@ class SlamtecPublisher(Node):
         msg.header.stamp = self.get_clock().now().to_msg()
         msg.header.frame_id = self.laser_frame
 
-        print(scan_data)
+        # print(scan_data)
 
-        # # Convert data
-        # angles = []
-        # ranges = []
-        # intensities = []
-        # for angle, distance, valid in scan_data:
-        #     angles.append(angle)
-        #     ranges.append(distance)
-        #     intensities.append(100.0 if valid else 0.0)
+        # Convert data
+        angles = []
+        ranges = []
+        intensities = []
+        for angle, distance, valid in scan_data:
+            if distance < 0.15 or distance > 8.0:
+                valid = False
+            angles.append(angle)
+            ranges.append(distance)
+            intensities.append(100.0 if valid else 0.0)
 
-        # msg.angle_min = min(angles)
-        # msg.angle_max = max(angles)
-        # msg.angle_increment = (msg.angle_max - msg.angle_min) / len(angles)
-        # msg.time_increment = 0.0
-        # msg.scan_time = 0.1
-        # msg.range_min = 0.15
-        # msg.range_max = 8.0
-        # msg.ranges = ranges
-        # msg.intensities = intensities
+        msg.angle_min = min(angles)
+        msg.angle_max = max(angles)
+        msg.angle_increment = (msg.angle_max - msg.angle_min) / len(angles)
+        msg.time_increment = 0.0
+        msg.scan_time = 0.1
+        msg.range_min = 0.15
+        msg.range_max = 8.0
+        msg.ranges = ranges
+        msg.intensities = intensities
 
-        # self.scan_publisher_.publish(msg)
+        self.scan_publisher_.publish(msg)
 
     def publish_map(self):
         map_data = self.slamtec.get_map_data()
+        known_data = self.slamtec.get_known_area()
         msg = OccupancyGrid()
         msg.header.stamp = self.get_clock().now().to_msg()
         msg.header.frame_id = self.map_frame
         
         # Convert map data to occupancy grid
         msg.info.resolution = 0.05  # 5cm per pixel
-        msg.info.width = map_data['dimension_x']
-        msg.info.height = map_data['dimension_y']
-        msg.info.origin.position.x = map_data['min_x']
-        msg.info.origin.position.y = map_data['min_y']
+        msg.info.width = known_data['max_x'] - known_data['min_x']
+        msg.info.height = known_data['max_y'] - known_data['min_y']
+        msg.info.origin.position.x = map_data.get('min_x', 0.0)
+        msg.info.origin.position.y = map_data.get('min_y', 0.0)
         
         # Convert 2D map data to 1D array
         grid_data = []
@@ -133,7 +143,6 @@ def main(args=None):
     parser = argparse.ArgumentParser(description='Slamtec Mapper Publisher')
     parser.add_argument('--host', type=str, default='192.168.11.1', help='Slamtec Mapper IP address')
     parser.add_argument('--port', type=int, default=1445, help='Slamtec Mapper port number')
-    parser.add_argument('--all', action='store_true', help='Publish all data (Scan, map, pose)')
     parser.add_argument('--scan', action='store_true', help='Publish scan data')
 
     parsed_args = parser.parse_args()
@@ -142,7 +151,6 @@ def main(args=None):
     publisher = SlamtecPublisher(
         host=parsed_args.host, 
         port=parsed_args.port,
-        publish_all=(True if parsed_args.all else False),
         publish_scan=(True if parsed_args.scan else False),
     )
     rclpy.spin(publisher)
