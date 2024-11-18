@@ -1,9 +1,0 @@
-{
-  "command": "getknownarea",
-  "args": {
-    "kind": 0,
-    "partially": false,
-    "type": 0
-  },
-  "request_id": 2
-}

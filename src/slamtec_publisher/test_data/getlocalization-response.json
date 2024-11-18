@@ -1,8 +1,0 @@
-{
-  "command": "getlocalization",
-  "request_id": 5,
-  "result": {
-    "code": 1,
-    "timestamp": 1357051
-  }
-}
