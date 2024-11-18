@@ -58,3 +58,6 @@ CATKIN_IGNORE
 
 # Dump folder
 src/python-slamtec-mapper-main/dump
+
+# Install folder
+install/
