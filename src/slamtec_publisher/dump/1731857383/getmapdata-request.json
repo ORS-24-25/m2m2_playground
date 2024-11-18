@@ -1,0 +1,15 @@
+{
+  "command": "getmapdata",
+  "args": {
+    "area": {
+      "height": 22.699999809265137,
+      "width": 10.049999952316284,
+      "x": -2.549999952316284,
+      "y": -6.449999809265137
+    },
+    "kind": 0,
+    "partially": false,
+    "type": 0
+  },
+  "request_id": 4
+}
